@@ -1,0 +1,1 @@
+"""Bootstrap da aplicação FastAPI."""

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from src.app.core.config import Settings
+from src.app.core.security import TokenService
 from src.db.session import DatabaseSessionManager
 from src.integrations.ai.base import AIProvider
 from src.messaging.base import MessageConsumer, MessagePublisher
@@ -12,6 +13,7 @@ from src.modules.users.application.use_cases import UserService
 class AppContainer:
     settings: Settings
     db_session_manager: DatabaseSessionManager
+    token_service: TokenService
     ai_provider: AIProvider
     message_publisher: MessagePublisher
     message_consumer: MessageConsumer

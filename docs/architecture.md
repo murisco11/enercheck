@@ -1,51 +1,99 @@
 # Arquitetura
 
-## Visão geral
+## Visao geral
 
-O projeto começa como um repositório único com dois processos:
+O projeto hoje roda como um repositorio unico com tres blocos principais:
 
-- API FastAPI para exposição HTTP e orquestração síncrona;
-- worker para tarefas assíncronas e processamento desacoplado.
+- API FastAPI para exposicao HTTP
+- PostgreSQL para persistencia
+- worker para fluxos assincronos
 
-Essa abordagem reduz o custo operacional do MVP sem impedir a evolução futura para múltiplos serviços.
+Essa composicao mantem o MVP simples de operar, mas ja separa responsabilidades para crescimento futuro.
 
-## Princípios
+## Principios
 
-- domínio e casos de uso ficam separados de framework e infraestrutura;
-- integrações externas entram por adapters;
-- contratos internos são mais estáveis que escolhas de vendor;
-- o worker consome eventos e chama casos de uso, sem concentrar regra de negócio solta;
-- a estrutura de pastas privilegia clareza para onboarding.
+- dominio e casos de uso ficam separados de framework e infraestrutura
+- persistencia entra por modulo, sem espalhar SQL pela camada HTTP
+- integracoes externas entram por adapters
+- contratos internos devem ser mais estaveis que escolhas de vendor
+- o worker consome eventos e chama casos de uso
 
 ## Fronteiras principais
 
 ### `src/app`
 
-Contém bootstrap da aplicação, configuração, observabilidade, middleware, tratamento de exceções e rotas.
+Bootstrap da aplicacao, configuracao, middleware, tratamento de excecoes, dependencias e rotas.
+
+### `src/db`
+
+Infraestrutura compartilhada de banco:
+
+- engine do SQLAlchemy
+- session factory
+- metadata base
+- carregamento dos modelos ORM
 
 ### `src/modules`
 
-Contém domínio e aplicação. É onde ficam entidades simples, schemas internos e casos de uso.
+Organizacao por modulo de negocio.
+
+No estado atual:
+
+- `ai_demo` para o fluxo de IA de exemplo
+- `users` para o CRUD de usuarios
+
+Cada modulo pode conter:
+
+- `domain`
+- `application`
+- `infrastructure`
 
 ### `src/integrations`
 
-Contém providers externos. Neste setup, a IA entra por uma interface única e implementações concretas.
+Providers externos, como a integracao de IA.
 
 ### `src/messaging`
 
-Contém contratos de publisher/consumer, definição de eventos e implementações de backend. O backend inicial é em memória.
+Contratos de publisher/consumer, definicao de eventos e implementacoes do backend de mensageria.
 
 ### `src/worker`
 
-Contém o loop de consumo e o processamento assíncrono dos eventos.
+Loop de consumo e processamento assincrono de eventos.
 
-## Caminho de evolução para microsserviços
+## Fluxos principais
 
-Se o produto crescer, a extração pode seguir esta ordem:
+### CRUD de usuarios
 
-1. trocar `inmemory` por um broker real;
-2. isolar jobs ou integrações pesadas no worker;
-3. mover módulos de negócio mais autônomos para serviços independentes;
-4. manter contratos de eventos e APIs como fronteiras explícitas.
+1. A rota HTTP recebe o payload.
+2. O caso de uso do modulo `users` orquestra a operacao.
+3. O repositorio SQLAlchemy acessa o PostgreSQL.
+4. A resposta volta em schema HTTP.
 
-Enquanto isso não for necessário, o repositório único mantém a entrega mais rápida e a manutenção mais simples.
+### Job assincrono de IA
+
+1. A API publica um evento.
+2. O worker consome esse evento.
+3. O caso de uso executa a logica necessaria.
+
+## Persistencia
+
+O banco padrao e PostgreSQL, configurado por variaveis de ambiente.
+
+Se `DATABASE_URL` nao for informada, a URL e montada a partir de:
+
+- `DB_USER`
+- `DB_PASSWORD`
+- `DB_HOST`
+- `DB_PORT`
+- `DB_NAME`
+
+As tabelas sao criadas no startup da aplicacao.
+
+## Evolucao natural
+
+Quando o projeto crescer, a evolucao mais provavel e:
+
+1. introduzir migracoes com Alembic
+2. trocar a mensageria `inmemory` por Redis, RabbitMQ ou similar
+3. separar modulos de negocio mais autonomos em servicos independentes
+4. manter eventos e contratos HTTP como fronteiras explicitas

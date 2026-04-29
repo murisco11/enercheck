@@ -18,7 +18,6 @@ router = APIRouter(prefix="/v1/ai-demo", tags=["ai-demo"])
 ai_demo_service_dependency = Depends(get_ai_demo_service)
 enqueue_ai_demo_job_dependency = Depends(get_enqueue_ai_demo_job_use_case)
 
-
 @router.post("/respond", response_model=AIDemoResponse)
 async def respond(
     payload: AIDemoRequest,

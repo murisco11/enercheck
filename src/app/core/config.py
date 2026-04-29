@@ -2,6 +2,7 @@ from functools import lru_cache
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import URL
 
 
 class Settings(BaseSettings):
@@ -10,6 +11,12 @@ class Settings(BaseSettings):
     app_host: str = Field(default="0.0.0.0", alias="APP_HOST")
     app_port: int = Field(default=8000, alias="APP_PORT")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+    database_url: str | None = Field(default=None, alias="DATABASE_URL")
+    db_user: str = Field(default="enercheck", alias="DB_USER")
+    db_password: str = Field(default="enercheck123", alias="DB_PASSWORD")
+    db_host: str = Field(default="localhost", alias="DB_HOST")
+    db_port: int = Field(default=5432, alias="DB_PORT")
+    db_name: str = Field(default="enercheck_db", alias="DB_NAME")
     ai_provider: str = Field(default="mock", alias="AI_PROVIDER")
     ai_mock_response_prefix: str = Field(default="[mock-ai]", alias="AI_MOCK_RESPONSE_PREFIX")
     messaging_backend: str = Field(default="inmemory", alias="MESSAGING_BACKEND")
@@ -24,6 +31,20 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+
+    @property
+    def resolved_database_url(self) -> str:
+        if self.database_url:
+            return self.database_url
+
+        return URL.create(
+            drivername="postgresql+psycopg",
+            username=self.db_user,
+            password=self.db_password,
+            host=self.db_host,
+            port=self.db_port,
+            database=self.db_name,
+        ).render_as_string(hide_password=False)
 
 
 @lru_cache

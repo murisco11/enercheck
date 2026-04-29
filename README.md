@@ -1,46 +1,148 @@
-# Enercheck
+# Enercheck Backend
 
-Base de projeto FastAPI para um MVP com integrações de IA, worker assíncrono e fronteiras preparadas para evoluir para microsserviços sem carregar a complexidade total desde o primeiro dia.
+Backend em FastAPI para um MVP com:
 
-## Objetivos do setup
+- API HTTP
+- PostgreSQL
+- CRUD de usuarios
+- integracao de IA via provider
+- worker para processamento assincrono
+- camada de mensageria preparada para evolucao
 
-- manter a API principal simples para desenvolver e operar;
-- isolar integrações de IA por provider;
-- introduzir um worker separado para fluxos assíncronos;
-- abstrair mensageria para permitir troca futura de backend;
-- documentar a arquitetura e as convenções do repositório.
-
-## Estrutura do projeto
+## Estrutura
 
 ```text
 .
 |-- docs/
 |-- src/
-|   |-- app/            # bootstrap da API, configuração, middleware e rotas
+|   |-- app/            # bootstrap da API, configuracao, middleware e rotas
+|   |-- db/             # engine, sessao e metadata do banco
 |   |-- integrations/   # providers externos, como IA
 |   |-- messaging/      # contratos, eventos e adapters de mensageria
-|   |-- modules/        # domínio e casos de uso
-|   `-- worker/         # entrypoint do worker e processamento assíncrono
+|   |-- modules/        # dominio, casos de uso e persistencia por modulo
+|   `-- worker/         # entrypoint do worker e processamento assincrono
 |-- tests/
 |   |-- integration/
 |   `-- unit/
 |-- .env.example
+|-- docker-compose.yml
 `-- pyproject.toml
 ```
 
 ## Requisitos
 
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/) para dependências e execução local
+- Python 3.11+
+- `uv`
+- Docker e Docker Compose para subir o PostgreSQL localmente
 
-## Como começar
+## Configuracao
 
-```bash
-uv sync
-cp .env.example .env
+Crie o arquivo de ambiente:
+
+```powershell
+Copy-Item .env.example .env
 ```
 
-## Comandos principais
+Variaveis principais:
+
+- `DB_USER`
+- `DB_PASSWORD`
+- `DB_HOST`
+- `DB_PORT`
+- `DB_NAME`
+- `DATABASE_URL` opcional. Se informado, sobrescreve a composicao das variaveis acima.
+
+## Como rodar
+
+### Opcao 1: API local + banco em Docker
+
+1. Instale as dependencias:
+
+```powershell
+uv sync
+```
+
+2. Suba o banco:
+
+```powershell
+docker compose up db -d
+```
+
+3. Rode a API:
+
+```powershell
+uv run uvicorn src.app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+4. Se quiser o worker:
+
+```powershell
+uv run python -m src.worker.main
+```
+
+Servicos:
+
+- API: `http://localhost:8000`
+- Swagger: `http://localhost:8000/docs`
+- PostgreSQL: `localhost:5432`
+
+## Banco de dados
+
+Credenciais padrao do ambiente local:
+
+- Host: `localhost`
+- Port: `5432`
+- Database: `enercheck_db`
+- User: `enercheck`
+- Password: `enercheck123`
+
+No startup da aplicacao, as tabelas sao criadas automaticamente pelo SQLAlchemy.
+
+## Endpoints
+
+### Health
+
+- `GET /health/live`
+- `GET /health/ready`
+
+### IA de exemplo
+
+- `POST /v1/ai-demo/respond`
+- `POST /v1/ai-demo/jobs`
+
+### Usuarios
+
+- `POST /v1/users`
+- `GET /v1/users`
+- `GET /v1/users/{user_id}`
+- `PUT /v1/users/{user_id}`
+- `DELETE /v1/users/{user_id}`
+
+Exemplo de criacao:
+
+```bash
+curl -X POST http://localhost:8000/v1/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Maria","email":"maria@example.com"}'
+```
+
+Exemplo de atualizacao:
+
+```bash
+curl -X PUT http://localhost:8000/v1/users/1 \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Maria Silva","email":"maria.silva@example.com"}'
+```
+
+## Comandos uteis
+
+```powershell
+uv run pytest
+uv run ruff check .
+uv run ruff format .
+```
+
+Ou com `make`:
 
 ```bash
 make api
@@ -50,64 +152,8 @@ make lint
 make format
 ```
 
-Se você estiver no Windows sem `make`, use os equivalentes:
-
-```powershell
-uv run uvicorn src.app.main:app --reload --host 0.0.0.0 --port 8000
-uv run python -m src.worker.main
-uv run pytest
-uv run ruff check .
-uv run ruff format .
-```
-
-## Endpoints iniciais
-
-- `GET /health/live`: liveness probe
-- `GET /health/ready`: readiness probe
-- `POST /v1/ai-demo/respond`: fluxo síncrono de exemplo com provider de IA
-- `POST /v1/ai-demo/jobs`: cria job assíncrono de demonstração para o worker
-
-Exemplo do fluxo síncrono:
-
-```bash
-curl -X POST http://localhost:8000/v1/ai-demo/respond \
-  -H "Content-Type: application/json" \
-  -d '{"message":"Explique o objetivo deste MVP"}'
-```
-
-Exemplo do fluxo assíncrono:
-
-```bash
-curl -X POST http://localhost:8000/v1/ai-demo/jobs \
-  -H "Content-Type: application/json" \
-  -d '{"message":"Processar este item em background"}'
-```
-
-## Configuração
-
-As variáveis de ambiente ficam centralizadas em `src/app/core/config.py`. O setup já separa:
-
-- app e ambiente;
-- observabilidade;
-- provider de IA;
-- backend de mensageria;
-- polling do worker.
-
-## IA e mensageria
-
-- A camada de IA expõe contratos internos estáveis e evita acoplamento direto ao SDK de vendor.
-- A mensageria começa com backend `inmemory`, suficiente para desenvolvimento local e testes.
-- A extração futura para Redis, RabbitMQ ou outro broker deve acontecer só nos adapters, sem reescrever casos de uso.
-
-## Documentação complementar
+## Documentacao complementar
 
 - [Arquitetura](docs/architecture.md)
-- [Integrações de IA](docs/integrations/ai.md)
+- [Integracoes de IA](docs/integrations/ai.md)
 - [Mensageria](docs/messaging.md)
-
-## Próximos passos sugeridos
-
-- adicionar autenticação e autorização;
-- incluir provider real de IA;
-- plugar broker real de mensageria;
-- adicionar observabilidade com tracing e métricas.

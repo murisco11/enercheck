@@ -1,33 +1,34 @@
-# Integrações de IA
+# Integracoes de IA
 
 ## Objetivo
 
-Permitir múltiplos providers sem espalhar detalhes de SDK pelo domínio nem pela camada HTTP.
+Permitir multiplos providers sem espalhar detalhes de SDK pelo dominio, pela camada HTTP ou pela persistencia.
 
 ## Contrato atual
 
-O provider de IA expõe duas operações internas:
+O provider de IA expoe operacoes internas para os casos de uso.
 
-- `generate_text(message: str) -> AITextResult`
-- `embed_text(text: str) -> AIEmbeddingResult`
+No estado atual, o fluxo HTTP demonstrado usa:
 
-Os casos de uso dependem apenas dessa interface.
+- `generate_text(message: str)`
+
+Os casos de uso dependem apenas da interface, nao do SDK do vendor.
 
 ## Provider inicial
 
-O setup inclui um provider `mock`, útil para:
+O projeto inclui um provider `mock`, util para:
 
-- desenvolvimento local;
-- testes determinísticos;
-- demos sem depender de credenciais externas.
+- desenvolvimento local
+- testes deterministicos
+- demos sem credenciais externas
 
 ## Como adicionar um novo provider
 
-1. criar uma implementação concreta em `src/integrations/ai/`;
-2. mapear a seleção no factory;
-3. adicionar as variáveis de ambiente necessárias em `Settings`;
-4. manter a resposta convertida para os tipos internos.
+1. criar uma implementacao concreta em `src/integrations/ai/`
+2. mapear a selecao no factory
+3. adicionar as variaveis de ambiente necessarias em `Settings`
+4. manter a resposta convertida para os tipos internos
 
 ## Regra importante
 
-SDKs de vendors não devem aparecer em rotas nem em casos de uso. O ponto de acoplamento permitido é o adapter do provider.
+SDKs de vendors nao devem aparecer em rotas, repositorios ou casos de uso. O ponto de acoplamento permitido e o adapter do provider.

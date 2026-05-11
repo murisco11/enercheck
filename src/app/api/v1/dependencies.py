@@ -45,7 +45,7 @@ def get_usuario_service(db: DbDep) -> UsuarioService:
 UsuarioServiceDep = Annotated[UsuarioService, Depends(get_usuario_service)]
 
 
-def get_usuario_atual(
+def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     db: DbDep,
 ) -> UsuarioAutenticado:
@@ -70,11 +70,11 @@ def get_usuario_atual(
         ) from exc
 
 
-UsuarioAtualDep = Annotated[UsuarioAutenticado, Depends(get_usuario_atual)]
+CurrentUserDep = Annotated[UsuarioAutenticado, Depends(get_current_user)]
 
 
 def requer_papel(*papeis: PapelUsuario):
-    def verificar(usuario: UsuarioAtualDep) -> UsuarioAutenticado:
+    def verificar(usuario: CurrentUserDep) -> UsuarioAutenticado:
         if PapelUsuario(usuario.papel) not in papeis:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

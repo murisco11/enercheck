@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
-from src.app.api.v1.dependencies import DbDep, UsuarioAtualDep, requer_papel
+from src.app.api.v1.dependencies import DbDep, CurrentUserDep, requer_papel
 from src.app.core.enums import PapelUsuario
 from src.app.domains.clientes.schemas import (
     ClienteCreate,
@@ -25,7 +25,6 @@ from src.app.domains.clientes.schemas import (
 )
 from src.app.domains.clientes.service import ClienteService, DistribuidoraService, LoteService
 
-# ── Distribuidoras ────────────────────────────────────────────────────────────
 
 distribuidoras_router = APIRouter(tags=["Distribuidoras"])
 
@@ -39,7 +38,7 @@ DistribuidoraServiceDep = Annotated[DistribuidoraService, Depends(get_distribuid
 
 @distribuidoras_router.get("/", response_model=list[DistribuidoraOut])
 def listar_distribuidoras(
-    _: UsuarioAtualDep,
+    _: CurrentUserDep,
     service: DistribuidoraServiceDep,
 ) -> list[DistribuidoraOut]:
     return service.listar()
@@ -48,7 +47,7 @@ def listar_distribuidoras(
 @distribuidoras_router.post("/", response_model=DistribuidoraOut, status_code=status.HTTP_201_CREATED)
 def criar_distribuidora(
     payload: DistribuidoraCreate,
-    ator: UsuarioAtualDep,
+    ator: CurrentUserDep,
     service: DistribuidoraServiceDep,
 ) -> DistribuidoraOut:
     return service.criar(payload, ator=ator)
@@ -57,7 +56,7 @@ def criar_distribuidora(
 @distribuidoras_router.get("/{id}", response_model=DistribuidoraOut)
 def obter_distribuidora(
     id: uuid.UUID,
-    _: UsuarioAtualDep,
+    _: CurrentUserDep,
     service: DistribuidoraServiceDep,
 ) -> DistribuidoraOut:
     return service.obter(id)
@@ -66,7 +65,7 @@ def obter_distribuidora(
 @distribuidoras_router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar_distribuidora(
     id: uuid.UUID,
-    ator: UsuarioAtualDep,
+    ator: CurrentUserDep,
     service: DistribuidoraServiceDep,
     permanente: bool = Query(default=False, description="Se true, remove permanentemente do banco"),
 ) -> Response:
@@ -74,7 +73,6 @@ def deletar_distribuidora(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-# ── Clientes ─────────────────────────────────────────────────────────────────
 
 clientes_router = APIRouter(tags=["Clientes"])
 
@@ -87,14 +85,14 @@ ClienteServiceDep = Annotated[ClienteService, Depends(get_cliente_service)]
 
 
 @clientes_router.get("/", response_model=ClientesOut)
-def listar_clientes(ator: UsuarioAtualDep, service: ClienteServiceDep) -> ClientesOut:
+def listar_clientes(ator: CurrentUserDep, service: ClienteServiceDep) -> ClientesOut:
     return service.listar(ator=ator)
 
 
 @clientes_router.post("/", response_model=ClienteOut, status_code=status.HTTP_201_CREATED)
 def criar_cliente(
     payload: ClienteCreate,
-    ator: UsuarioAtualDep,
+    ator: CurrentUserDep,
     service: ClienteServiceDep,
 ) -> ClienteOut:
     return service.criar(payload, ator=ator)
@@ -103,7 +101,7 @@ def criar_cliente(
 @clientes_router.get("/{id}", response_model=ClienteOut)
 def obter_cliente(
     id: uuid.UUID,
-    ator: UsuarioAtualDep,
+    ator: CurrentUserDep,
     service: ClienteServiceDep,
 ) -> ClienteOut:
     return service.obter(id, ator=ator)
@@ -112,7 +110,7 @@ def obter_cliente(
 @clientes_router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar_cliente(
     id: uuid.UUID,
-    ator: UsuarioAtualDep,
+    ator: CurrentUserDep,
     service: ClienteServiceDep,
     permanente: bool = Query(default=False, description="Se true, remove permanentemente do banco"),
 ) -> Response:
@@ -124,7 +122,7 @@ def deletar_cliente(
 def atualizar_cliente(
     id: uuid.UUID,
     payload: ClienteUpdate,
-    ator: UsuarioAtualDep,
+    ator: CurrentUserDep,
     service: ClienteServiceDep,
 ) -> ClienteOut:
     return service.atualizar(id, payload, ator=ator)
@@ -133,7 +131,7 @@ def atualizar_cliente(
 @clientes_router.get("/{id}/ucs", response_model=UCsOut)
 def listar_ucs(
     id: uuid.UUID,
-    ator: UsuarioAtualDep,
+    ator: CurrentUserDep,
     service: ClienteServiceDep,
 ) -> UCsOut:
     return service.listar_ucs(id, ator=ator)
@@ -143,7 +141,7 @@ def listar_ucs(
 def criar_uc(
     id: uuid.UUID,
     payload: UnidadeConsumidoraCreate,
-    ator: UsuarioAtualDep,
+    ator: CurrentUserDep,
     service: ClienteServiceDep,
 ) -> UnidadeConsumidoraOut:
     return service.criar_uc(id, payload, ator=ator)
@@ -153,7 +151,7 @@ def criar_uc(
 def obter_uc(
     id: uuid.UUID,
     uc_id: uuid.UUID,
-    ator: UsuarioAtualDep,
+    ator: CurrentUserDep,
     service: ClienteServiceDep,
 ) -> UnidadeConsumidoraOut:
     return service.obter_uc(id, uc_id, ator=ator)
@@ -163,7 +161,7 @@ def obter_uc(
 def deletar_uc(
     id: uuid.UUID,
     uc_id: uuid.UUID,
-    ator: UsuarioAtualDep,
+    ator: CurrentUserDep,
     service: ClienteServiceDep,
     permanente: bool = Query(default=False, description="Se true, remove permanentemente do banco"),
 ) -> Response:
@@ -176,13 +174,12 @@ def atualizar_uc(
     id: uuid.UUID,
     uc_id: uuid.UUID,
     payload: UnidadeConsumidoraUpdate,
-    ator: UsuarioAtualDep,
+    ator: CurrentUserDep,
     service: ClienteServiceDep,
 ) -> UnidadeConsumidoraOut:
     return service.atualizar_uc(id, uc_id, payload, ator=ator)
 
 
-# ── Lotes ─────────────────────────────────────────────────────────────────────
 
 lotes_router = APIRouter(tags=["Lotes"])
 
@@ -196,7 +193,7 @@ LoteServiceDep = Annotated[LoteService, Depends(get_lote_service)]
 
 @lotes_router.get("/", response_model=PageKeysetOut[LoteResumoOut])
 def listar_lotes(
-    ator: UsuarioAtualDep,
+    ator: CurrentUserDep,
     service: LoteServiceDep,
     uc_id: uuid.UUID | None = Query(default=None),
     after_id: uuid.UUID | None = Query(default=None),
@@ -209,7 +206,7 @@ def listar_lotes(
 @lotes_router.post("/", response_model=LoteOut, status_code=status.HTTP_201_CREATED)
 def criar_lote(
     payload: LoteCreate,
-    ator: UsuarioAtualDep,
+    ator: CurrentUserDep,
     service: LoteServiceDep,
 ) -> LoteOut:
     return service.criar(payload, ator=ator)
@@ -218,7 +215,7 @@ def criar_lote(
 @lotes_router.get("/{id}", response_model=LoteOut)
 def obter_lote(
     id: uuid.UUID,
-    ator: UsuarioAtualDep,
+    ator: CurrentUserDep,
     service: LoteServiceDep,
 ) -> LoteOut:
     return service.obter(id, ator=ator)
@@ -227,7 +224,7 @@ def obter_lote(
 @lotes_router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar_lote(
     id: uuid.UUID,
-    ator: UsuarioAtualDep,
+    ator: CurrentUserDep,
     service: LoteServiceDep,
     permanente: bool = Query(default=False, description="Se true, remove permanentemente do banco"),
 ) -> Response:
@@ -239,7 +236,7 @@ def deletar_lote(
 def atualizar_lote(
     id: uuid.UUID,
     payload: LoteUpdate,
-    ator: UsuarioAtualDep,
+    ator: CurrentUserDep,
     service: LoteServiceDep,
 ) -> LoteOut:
     return service.atualizar(id, payload, ator=ator)

@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
-from src.app.api.v1.dependencies import UsuarioAtualDep, UsuarioServiceDep, requer_papel
+from src.app.api.v1.dependencies import CurrentUserDep, UsuarioServiceDep, requer_papel
 from src.app.core.enums import PapelUsuario
 from src.app.domains.auth.schemas import (
     LoginRequest,
@@ -23,7 +23,7 @@ def token(payload: LoginRequest, service: UsuarioServiceDep) -> TokenOut:
 
 
 @router.get("/me", response_model=UsuarioOut)
-def me(usuario: UsuarioAtualDep, service: UsuarioServiceDep) -> UsuarioOut:
+def me(usuario: CurrentUserDep, service: UsuarioServiceDep) -> UsuarioOut:
     return service.obter(usuario.id)
 
 
@@ -43,7 +43,7 @@ def listar(
 @router.get("/usuarios/{id}", response_model=UsuarioOut)
 def obter(
     id: uuid.UUID,
-    usuario: UsuarioAtualDep,
+    usuario: CurrentUserDep,
     service: UsuarioServiceDep,
 ) -> UsuarioOut:
     if PapelUsuario(usuario.papel) != PapelUsuario.ADMIN and usuario.id != id:
@@ -57,7 +57,7 @@ def obter(
 def atualizar(
     id: uuid.UUID,
     payload: UsuarioUpdate,
-    usuario: UsuarioAtualDep,
+    usuario: CurrentUserDep,
     service: UsuarioServiceDep,
 ) -> UsuarioOut:
     return service.atualizar(id, payload, ator=usuario)
@@ -66,7 +66,7 @@ def atualizar(
 @router.delete("/usuarios/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar(
     id: uuid.UUID,
-    usuario: UsuarioAtualDep,
+    usuario: CurrentUserDep,
     service: UsuarioServiceDep,
     permanente: bool = Query(default=False, description="Se true, remove permanentemente do banco"),
 ) -> Response:

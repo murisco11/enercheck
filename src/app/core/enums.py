@@ -86,3 +86,10 @@ class ModoDevolucao(StrEnum):
     CREDITO_FATURA = "credito_fatura"
     DEPOSITO = "deposito"
     COMPENSACAO = "compensacao"
+
+
+class PostoHorario(StrEnum):
+    PONTA = "ponta"
+    FORA_PONTA = "fora_ponta"
+    INTERMEDIARIO = "intermediario"
+    UNICO = "unico"

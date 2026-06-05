@@ -1,7 +1,7 @@
 import uuid
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from src.app.domains.clientes.models import (
     AcessoCliente,
@@ -11,9 +11,11 @@ from src.app.domains.clientes.models import (
     UnidadeConsumidora,
 )
 from src.app.domains.clientes.schemas import (
+    AcessoClienteUpdate,
     ClienteCreate,
     ClienteUpdate,
     DistribuidoraCreate,
+    DistribuidoraUpdate,
     LoteCreate,
     LoteUpdate,
     PaginacaoKeyset,
@@ -42,6 +44,19 @@ class DistribuidoraRepository:
 
     def buscar_por_id(self, id: uuid.UUID) -> Distribuidora | None:
         return self.db.get(Distribuidora, id)
+
+    def atualizar(self, dist: Distribuidora, dados: DistribuidoraUpdate) -> None:
+        if dados.razao_social is not None:
+            dist.razao_social = dados.razao_social
+        if dados.cnpj is not None:
+            dist.cnpj = dados.cnpj
+        if dados.sigla is not None:
+            dist.sigla = dados.sigla
+        if dados.estado is not None:
+            dist.estado = dados.estado
+        if dados.ativo is not None:
+            dist.ativo = dados.ativo
+        self.db.flush()
 
     def desativar(self, dist: Distribuidora) -> None:
         dist.ativo = False
@@ -124,6 +139,27 @@ class AcessoClienteRepository:
         self.db.add(acesso)
         self.db.flush()
         return acesso
+
+    def listar_por_cliente(self, cliente_id: uuid.UUID) -> list[AcessoCliente]:
+        return list(
+            self.db.scalars(
+                select(AcessoCliente)
+                .where(AcessoCliente.cliente_id == cliente_id)
+                .order_by(AcessoCliente.usuario_id)
+            ).all()
+        )
+
+    def buscar_por_id(self, acesso_id: uuid.UUID) -> AcessoCliente | None:
+        return self.db.get(AcessoCliente, acesso_id)
+
+    def atualizar(self, acesso: AcessoCliente, dados: AcessoClienteUpdate) -> None:
+        if dados.pode_editar is not None:
+            acesso.pode_editar = dados.pode_editar
+        self.db.flush()
+
+    def remover(self, acesso: AcessoCliente) -> None:
+        self.db.delete(acesso)
+        self.db.flush()
 
 
 class UnidadeConsumidoraRepository:

@@ -1,6 +1,7 @@
 import uuid
 
-from sqlalchemy import Enum as SAEnum, String
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.app.core.enums import PapelUsuario

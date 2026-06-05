@@ -1,25 +1,25 @@
 import uuid
-from datetime import date
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
-from sqlalchemy.orm import Session
 
-from src.app.api.v1.dependencies import CurrentUserDep, DbDep, get_current_user, requer_papel
+from src.app.api.v1.dependencies import CurrentUserDep, DbDep, requer_papel
 from src.app.core.enums import PapelUsuario
-from src.app.domains.auth.models import Usuario
 from src.app.domains.regulatorio.schemas import (
-    BuscaSimilaridadeQuery,
     ChunkCreate,
     ChunkOut,
-    ChunkSimilarOut,
     DocumentoRegulatorioCreate,
     DocumentoRegulatorioOut,
+    DocumentoRegulatorioUpdate,
     PacoteRegrasCreate,
     PacoteRegrasOut,
+    PacoteRegrasUpdate,
     RegraValidacaoCreate,
     RegraValidacaoOut,
+    RegraValidacaoUpdate,
     SnapshotTarifaCreate,
     SnapshotTarifaOut,
+    SnapshotTarifaUpdate,
 )
 from src.app.domains.regulatorio.service import (
     ChunkService,
@@ -51,6 +51,15 @@ def buscar_documento(doc_id: uuid.UUID, db: DbDep, _: CurrentUserDep):
     return DocumentoRegulatorioService(db).buscar(doc_id)
 
 
+@router.patch(
+    "/documentos/{doc_id}",
+    response_model=DocumentoRegulatorioOut,
+    dependencies=[Depends(requer_papel(PapelUsuario.ADMIN))],
+)
+def atualizar_documento(doc_id: uuid.UUID, data: DocumentoRegulatorioUpdate, db: DbDep):
+    return DocumentoRegulatorioService(db).atualizar(doc_id, data)
+
+
 @router.delete(
     "/documentos/{doc_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -80,29 +89,13 @@ def listar_chunks(doc_id: uuid.UUID, db: DbDep, _: CurrentUserDep):
     return ChunkService(db).listar_por_documento(doc_id)
 
 
-@router.patch(
-    "/chunks/{chunk_id}/embedding",
-    status_code=204,
-    dependencies=[Depends(requer_papel(PapelUsuario.ADMIN))],
-)
-def atualizar_embedding(chunk_id: uuid.UUID, embedding: list[float], db: DbDep):
-    ChunkService(db).atualizar_embedding(chunk_id, embedding)
-
-
-@router.post("/chunks/buscar", response_model=list[ChunkSimilarOut])
-def buscar_similares(query: BuscaSimilaridadeQuery, db: DbDep, _: CurrentUserDep):
-    """Busca semântica por similaridade de cosseno via pgvector.
-    Integre um provedor de embeddings antes de usar este endpoint.
-    Exemplo com OpenAI:
-
-        vec = OpenAI().embeddings.create(
-            model="text-embedding-3-small", input=query.texto
-        ).data[0].embedding
-        return ChunkService(db).buscar_similares(query, vec)
-    """
-    raise NotImplementedError(
-        "Conecte um provedor de embeddings (OpenAI, Cohere, etc.) antes de usar este endpoint."
-    )
+@router.get("/tarifas/snapshots", response_model=list[SnapshotTarifaOut])
+def listar_snapshots(
+    db: DbDep,
+    _: CurrentUserDep,
+    distribuidora_id: Annotated[uuid.UUID | None, Query()] = None,
+):
+    return SnapshotTarifaService(db).listar(distribuidora_id=distribuidora_id)
 
 
 @router.post(
@@ -113,6 +106,20 @@ def buscar_similares(query: BuscaSimilaridadeQuery, db: DbDep, _: CurrentUserDep
 )
 def criar_snapshot(data: SnapshotTarifaCreate, db: DbDep):
     return SnapshotTarifaService(db).criar(data)
+
+
+@router.get("/tarifas/snapshots/{snap_id}", response_model=SnapshotTarifaOut)
+def buscar_snapshot(snap_id: uuid.UUID, db: DbDep, _: CurrentUserDep):
+    return SnapshotTarifaService(db).buscar(snap_id)
+
+
+@router.patch(
+    "/tarifas/snapshots/{snap_id}",
+    response_model=SnapshotTarifaOut,
+    dependencies=[Depends(requer_papel(PapelUsuario.ADMIN))],
+)
+def atualizar_snapshot(snap_id: uuid.UUID, data: SnapshotTarifaUpdate, db: DbDep):
+    return SnapshotTarifaService(db).atualizar(snap_id, data)
 
 
 @router.delete(
@@ -129,16 +136,6 @@ def deletar_snapshot(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/tarifas/snapshots/vigentes", response_model=list[SnapshotTarifaOut])
-def buscar_snapshots_vigentes(
-    distribuidora_id: uuid.UUID,
-    data_referencia: date,
-    db: DbDep,
-    _: CurrentUserDep,
-):
-    return SnapshotTarifaService(db).buscar_vigente(distribuidora_id, data_referencia)
-
-
 @router.post(
     "/regras/pacotes",
     response_model=PacoteRegrasOut,
@@ -152,6 +149,20 @@ def criar_pacote(data: PacoteRegrasCreate, db: DbDep, usuario: CurrentUserDep):
 @router.get("/regras/pacotes", response_model=list[PacoteRegrasOut])
 def listar_pacotes(db: DbDep, _: CurrentUserDep):
     return PacoteRegrasService(db).listar()
+
+
+@router.get("/regras/pacotes/{pacote_id}", response_model=PacoteRegrasOut)
+def buscar_pacote(pacote_id: uuid.UUID, db: DbDep, _: CurrentUserDep):
+    return PacoteRegrasService(db).buscar(pacote_id)
+
+
+@router.patch(
+    "/regras/pacotes/{pacote_id}",
+    response_model=PacoteRegrasOut,
+    dependencies=[Depends(requer_papel(PapelUsuario.ADMIN))],
+)
+def atualizar_pacote(pacote_id: uuid.UUID, data: PacoteRegrasUpdate, db: DbDep):
+    return PacoteRegrasService(db).atualizar(pacote_id, data)
 
 
 @router.delete(
@@ -176,6 +187,20 @@ def deletar_pacote(
 )
 def criar_regra(data: RegraValidacaoCreate, db: DbDep):
     return PacoteRegrasService(db).adicionar_regra(data)
+
+
+@router.get("/regras/{regra_id}", response_model=RegraValidacaoOut)
+def buscar_regra(regra_id: uuid.UUID, db: DbDep, _: CurrentUserDep):
+    return PacoteRegrasService(db).buscar_regra(regra_id)
+
+
+@router.patch(
+    "/regras/{regra_id}",
+    response_model=RegraValidacaoOut,
+    dependencies=[Depends(requer_papel(PapelUsuario.ADMIN))],
+)
+def atualizar_regra(regra_id: uuid.UUID, data: RegraValidacaoUpdate, db: DbDep):
+    return PacoteRegrasService(db).atualizar_regra(regra_id, data)
 
 
 @router.get("/regras/pacotes/{pacote_id}/regras", response_model=list[RegraValidacaoOut])

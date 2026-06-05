@@ -21,6 +21,9 @@ def auth_header(token: str) -> dict[str, str]:
 
 @pytest.fixture(autouse=True)
 def reset_test_state():
+    os.environ["DATABASE_URL"] = f"sqlite:///{test_db_path.as_posix()}"
+    os.environ["AUTH_SECRET_KEY"] = "test-secret-key-auth"
+    os.environ["AUTH_TOKEN_EXPIRE_MINUTES"] = "480"
     get_session_manager.cache_clear()
     get_token_service.cache_clear()
     get_settings.cache_clear()
@@ -149,7 +152,10 @@ class TestUsuariosAdmin:
         with TestClient(app) as client:
             user = _criar_usuario(client, "Admin", "admin@test.com")
             tok = _login(client, "admin@test.com")["access_token"]
-            resp = client.get(f"/v1/auth/usuarios/{user['id']}", headers=auth_header(tok))
+            resp = client.get(
+                f"/v1/auth/usuarios/{user['id']}",
+                headers=auth_header(tok),
+            )
             assert resp.status_code == 200
 
     def test_obter_usuario_outro_usuario_como_consultor_retorna_403(self):
@@ -157,7 +163,10 @@ class TestUsuariosAdmin:
             admin = _criar_usuario(client, "Admin", "admin@test.com")
             _criar_usuario(client, "Consultor", "consultor@test.com")
             consultor_tok = _login(client, "consultor@test.com")["access_token"]
-            resp = client.get(f"/v1/auth/usuarios/{admin['id']}", headers=auth_header(consultor_tok))
+            resp = client.get(
+                f"/v1/auth/usuarios/{admin['id']}",
+                headers=auth_header(consultor_tok),
+            )
             assert resp.status_code == 403
 
 

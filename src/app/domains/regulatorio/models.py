@@ -1,17 +1,22 @@
 import uuid
 from datetime import date
+from decimal import Decimal
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    JSON,
     Boolean,
     Date,
-    Enum as SAEnum,
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
+)
+from sqlalchemy import (
+    Enum as SAEnum,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -28,6 +33,8 @@ from src.app.domains.regulatorio.enums import (
 )
 
 EMBEDDING_DIM = 1536  # text-embedding-3-small
+JSON_TYPE = JSON().with_variant(JSONB(), "postgresql")
+EMBEDDING_TYPE = Vector(EMBEDDING_DIM).with_variant(JSON(), "sqlite")
 
 
 class DocumentoRegulatorio(SoftDeleteMixin, TimestampMixin, Base):
@@ -84,7 +91,7 @@ class ChunkRegulatorio(Base):
     caminho_secao: Mapped[str | None] = mapped_column(String(500), nullable=True)
     conteudo: Mapped[str] = mapped_column(Text, nullable=False)
     hash_conteudo: Mapped[str] = mapped_column(String(64), nullable=False)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(EMBEDDING_TYPE, nullable=True)
     total_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     documento: Mapped["DocumentoRegulatorio"] = relationship(
@@ -130,11 +137,13 @@ class SnapshotTarifa(SoftDeleteMixin, Base):
     )
     vigencia_inicio: Mapped[date] = mapped_column(Date, nullable=False)
     vigencia_fim: Mapped[date | None] = mapped_column(Date, nullable=True)
-    valor_tusd: Mapped[float] = mapped_column(nullable=False)
-    valor_te: Mapped[float] = mapped_column(nullable=False)
-    valor_tusd_com_tributos: Mapped[float] = mapped_column(nullable=False)
-    valor_te_com_tributos: Mapped[float] = mapped_column(nullable=False)
-    adicional_bandeira: Mapped[float] = mapped_column(nullable=False, default=0.0)
+    valor_tusd: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    valor_te: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    valor_tusd_com_tributos: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    valor_te_com_tributos: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    adicional_bandeira: Mapped[Decimal] = mapped_column(
+        Numeric(18, 6), nullable=False, default=Decimal("0")
+    )
     resolucao_origem: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     documento_origem: Mapped["DocumentoRegulatorio | None"] = relationship(
@@ -200,7 +209,7 @@ class RegraValidacao(Base):
     )
     vigencia_inicio: Mapped[date | None] = mapped_column(Date, nullable=True)
     vigencia_fim: Mapped[date | None] = mapped_column(Date, nullable=True)
-    expressao_logica: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    expressao_logica: Mapped[dict | None] = mapped_column(JSON_TYPE, nullable=True)
     ativa: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     pacote: Mapped["PacoteRegras"] = relationship(back_populates="regras", lazy="raise")

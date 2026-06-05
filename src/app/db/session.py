@@ -20,23 +20,27 @@ class DatabaseSessionManager:
         )
 
     def create_tables(self) -> None:
-        import src.app.db.base  # noqa: F401 — registra todos os models para o Alembic
         from sqlalchemy import text
 
-        with self._engine.connect() as conn:
-            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-            conn.commit()
+        import src.app.db.base  # noqa: F401 — registra todos os models para o Alembic
+
+        is_postgres = self._engine.dialect.name == "postgresql"
+        if is_postgres:
+            with self._engine.connect() as conn:
+                conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                conn.commit()
 
         Base.metadata.create_all(self._engine)
 
-        with self._engine.connect() as conn:
-            conn.execute(text("""
-                CREATE INDEX IF NOT EXISTS ix_chunk_embedding_hnsw
-                ON chunk_regulatorio
-                USING hnsw (embedding vector_cosine_ops)
-                WITH (m = 16, ef_construction = 64)
-            """))
-            conn.commit()
+        if is_postgres:
+            with self._engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS ix_chunk_embedding_hnsw
+                    ON chunk_regulatorio
+                    USING hnsw (embedding vector_cosine_ops)
+                    WITH (m = 16, ef_construction = 64)
+                """))
+                conn.commit()
 
     def get_db(self) -> Generator[Session, None, None]:
         with self.session_factory() as session:

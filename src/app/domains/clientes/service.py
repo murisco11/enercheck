@@ -3,13 +3,14 @@ import uuid
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from src.app.core.enums import PapelUsuario, StatusLote
+from src.app.core.enums import PapelUsuario
 from src.app.core.exceptions import (
     AcessoNegadoError,
     ConflitoDuplicidadeError,
     NaoEncontradoError,
     RegraVioladaError,
 )
+from src.app.domains.auth.models import Usuario
 from src.app.domains.auth.service import UsuarioAutenticado
 from src.app.domains.clientes.models import (
     AcessoCliente,
@@ -26,12 +27,17 @@ from src.app.domains.clientes.repository import (
     UnidadeConsumidoraRepository,
 )
 from src.app.domains.clientes.schemas import (
+    AcessoClienteCreate,
+    AcessoClienteOut,
+    AcessoClienteUpdate,
+    AcessosClienteOut,
     ClienteCreate,
     ClienteOut,
     ClienteResumoOut,
     ClientesOut,
     DistribuidoraCreate,
     DistribuidoraOut,
+    DistribuidoraUpdate,
     LoteCreate,
     LoteOut,
     LoteResumoOut,
@@ -78,6 +84,21 @@ class DistribuidoraService:
 
     def obter(self, id: uuid.UUID) -> DistribuidoraOut:
         return DistribuidoraOut.model_validate(self._obter_orm(id))
+
+    def atualizar(
+        self, id: uuid.UUID, dados: DistribuidoraUpdate, ator: UsuarioAutenticado
+    ) -> DistribuidoraOut:
+        if PapelUsuario(ator.papel) != PapelUsuario.ADMIN:
+            raise AcessoNegadoError("Apenas administradores podem editar distribuidoras.")
+        dist = self._obter_orm(id)
+        try:
+            self.repo.atualizar(dist, dados)
+            self.db.commit()
+            self.db.refresh(dist)
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise ConflitoDuplicidadeError("Já existe uma distribuidora com este CNPJ.") from exc
+        return DistribuidoraOut.model_validate(dist)
 
     def _obter_orm(self, id: uuid.UUID) -> Distribuidora:
         dist = self.repo.buscar_por_id(id)
@@ -144,6 +165,67 @@ class ClienteService:
             self.repo.remover(cliente)
         else:
             self.repo.desativar(cliente)
+        self.db.commit()
+
+    def listar_acessos(self, cliente_id: uuid.UUID, ator: UsuarioAutenticado) -> AcessosClienteOut:
+        if PapelUsuario(ator.papel) != PapelUsuario.ADMIN:
+            raise AcessoNegadoError("Apenas administradores podem listar acessos de clientes.")
+        self._obter_orm(cliente_id)
+        acessos = self.acesso_repo.listar_por_cliente(cliente_id)
+        return AcessosClienteOut(
+            itens=[AcessoClienteOut.model_validate(a) for a in acessos],
+            total=len(acessos),
+        )
+
+    def criar_acesso(
+        self, cliente_id: uuid.UUID, dados: AcessoClienteCreate, ator: UsuarioAutenticado
+    ) -> AcessoClienteOut:
+        if PapelUsuario(ator.papel) != PapelUsuario.ADMIN:
+            raise AcessoNegadoError("Apenas administradores podem conceder acesso a clientes.")
+        self._obter_orm(cliente_id)
+        if self.db.get(Usuario, dados.usuario_id) is None:
+            raise NaoEncontradoError("Usuário não encontrado.")
+        try:
+            acesso = self.acesso_repo.criar(
+                usuario_id=dados.usuario_id,
+                cliente_id=cliente_id,
+                pode_editar=dados.pode_editar,
+            )
+            self.db.commit()
+            self.db.refresh(acesso)
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise ConflitoDuplicidadeError("Este usuário já possui acesso ao cliente.") from exc
+        return AcessoClienteOut.model_validate(acesso)
+
+    def atualizar_acesso(
+        self,
+        cliente_id: uuid.UUID,
+        acesso_id: uuid.UUID,
+        dados: AcessoClienteUpdate,
+        ator: UsuarioAutenticado,
+    ) -> AcessoClienteOut:
+        if PapelUsuario(ator.papel) != PapelUsuario.ADMIN:
+            raise AcessoNegadoError("Apenas administradores podem alterar acessos de clientes.")
+        self._obter_orm(cliente_id)
+        acesso = self.acesso_repo.buscar_por_id(acesso_id)
+        if acesso is None or acesso.cliente_id != cliente_id:
+            raise NaoEncontradoError("Acesso de cliente não encontrado.")
+        self.acesso_repo.atualizar(acesso, dados)
+        self.db.commit()
+        self.db.refresh(acesso)
+        return AcessoClienteOut.model_validate(acesso)
+
+    def deletar_acesso(
+        self, cliente_id: uuid.UUID, acesso_id: uuid.UUID, ator: UsuarioAutenticado
+    ) -> None:
+        if PapelUsuario(ator.papel) != PapelUsuario.ADMIN:
+            raise AcessoNegadoError("Apenas administradores podem remover acessos de clientes.")
+        self._obter_orm(cliente_id)
+        acesso = self.acesso_repo.buscar_por_id(acesso_id)
+        if acesso is None or acesso.cliente_id != cliente_id:
+            raise NaoEncontradoError("Acesso de cliente não encontrado.")
+        self.acesso_repo.remover(acesso)
         self.db.commit()
 
     def criar_uc(
@@ -281,7 +363,7 @@ class LoteService:
         page = lotes[: pag.limite]
         next_cursor = page[-1].id if has_more and page else None
         return PageKeysetOut(
-            data=[LoteResumoOut.model_validate(l) for l in page],
+            data=[LoteResumoOut.model_validate(lote) for lote in page],
             next_cursor=next_cursor,
             has_more=has_more,
         )

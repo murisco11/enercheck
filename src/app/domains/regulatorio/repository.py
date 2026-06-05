@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import or_, select
+from sqlalchemy import desc, or_, select
 from sqlalchemy.orm import Session
 
 from src.app.domains.regulatorio.models import (
@@ -10,6 +10,12 @@ from src.app.domains.regulatorio.models import (
     PacoteRegras,
     RegraValidacao,
     SnapshotTarifa,
+)
+from src.app.domains.regulatorio.schemas import (
+    DocumentoRegulatorioUpdate,
+    PacoteRegrasUpdate,
+    RegraValidacaoUpdate,
+    SnapshotTarifaUpdate,
 )
 
 
@@ -26,7 +32,16 @@ class DocumentoRegulatorioRepository:
         return self._s.get(DocumentoRegulatorio, doc_id)
 
     def listar(self) -> list[DocumentoRegulatorio]:
-        return list(self._s.execute(select(DocumentoRegulatorio)).scalars().all())
+        return list(
+            self._s.execute(select(DocumentoRegulatorio).order_by(DocumentoRegulatorio.titulo))
+            .scalars()
+            .all()
+        )
+
+    def atualizar(self, doc: DocumentoRegulatorio, dados: DocumentoRegulatorioUpdate) -> None:
+        for campo, valor in dados.model_dump(exclude_unset=True).items():
+            setattr(doc, campo, valor)
+        self._s.flush()
 
     def desativar(self, doc: DocumentoRegulatorio) -> None:
         doc.ativo = False
@@ -44,30 +59,6 @@ class ChunkRegulatorioRepository:
     def criar_lote(self, chunks: list[ChunkRegulatorio]) -> None:
         self._s.add_all(chunks)
         self._s.flush()
-
-    def atualizar_embedding(self, chunk_id: uuid.UUID, embedding: list[float]) -> None:
-        chunk = self._s.get(ChunkRegulatorio, chunk_id)
-        if chunk:
-            chunk.embedding = embedding
-            self._s.flush()
-
-    def buscar_similares(
-        self,
-        embedding: list[float],
-        top_k: int = 5,
-        documento_id: uuid.UUID | None = None,
-    ) -> list[tuple[ChunkRegulatorio, float]]:
-        distancia = ChunkRegulatorio.embedding.cosine_distance(embedding)
-        stmt = (
-            select(ChunkRegulatorio, (1 - distancia).label("similaridade"))
-            .where(ChunkRegulatorio.embedding.is_not(None))
-            .order_by(distancia)
-            .limit(top_k)
-        )
-        if documento_id:
-            stmt = stmt.where(ChunkRegulatorio.documento_regulatorio_id == documento_id)
-        result = self._s.execute(stmt)
-        return [(row[0], float(row[1])) for row in result.all()]
 
     def listar_por_documento(self, documento_id: uuid.UUID) -> list[ChunkRegulatorio]:
         return list(
@@ -90,6 +81,23 @@ class SnapshotTarifaRepository:
         self._s.flush()
         return snap
 
+    def listar(self, distribuidora_id: uuid.UUID | None = None) -> list[SnapshotTarifa]:
+        stmt = select(SnapshotTarifa).order_by(
+            SnapshotTarifa.distribuidora_id,
+            desc(SnapshotTarifa.vigencia_inicio),
+        )
+        if distribuidora_id is not None:
+            stmt = stmt.where(SnapshotTarifa.distribuidora_id == distribuidora_id)
+        return list(self._s.execute(stmt).scalars().all())
+
+    def buscar_por_id(self, snap_id: uuid.UUID) -> SnapshotTarifa | None:
+        return self._s.get(SnapshotTarifa, snap_id)
+
+    def atualizar(self, snap: SnapshotTarifa, dados: SnapshotTarifaUpdate) -> None:
+        for campo, valor in dados.model_dump(exclude_unset=True).items():
+            setattr(snap, campo, valor)
+        self._s.flush()
+
     def desativar(self, snap: SnapshotTarifa) -> None:
         snap.ativo = False
         self._s.flush()
@@ -98,21 +106,37 @@ class SnapshotTarifaRepository:
         self._s.delete(snap)
         self._s.flush()
 
-    def buscar_vigente(
-        self, distribuidora_id: uuid.UUID, data_referencia: date
-    ) -> list[SnapshotTarifa]:
+    def existe_sobreposicao(
+        self, snap: SnapshotTarifa, ignorar_id: uuid.UUID | None = None
+    ) -> bool:
+        fim = snap.vigencia_fim or date.max
         stmt = (
-            select(SnapshotTarifa)
-            .where(SnapshotTarifa.distribuidora_id == distribuidora_id)
-            .where(SnapshotTarifa.vigencia_inicio <= data_referencia)
+            select(SnapshotTarifa.id)
+            .where(SnapshotTarifa.ativo.is_(True))
+            .where(SnapshotTarifa.distribuidora_id == snap.distribuidora_id)
+            .where(SnapshotTarifa.grupo == snap.grupo)
+            .where(SnapshotTarifa.subgrupo == snap.subgrupo)
+            .where(SnapshotTarifa.modalidade == snap.modalidade)
+            .where(self._nullable_equals(SnapshotTarifa.posto_horario, snap.posto_horario))
+            .where(self._nullable_equals(SnapshotTarifa.bandeira, snap.bandeira))
+            .where(SnapshotTarifa.vigencia_inicio <= fim)
             .where(
                 or_(
                     SnapshotTarifa.vigencia_fim.is_(None),
-                    SnapshotTarifa.vigencia_fim >= data_referencia,
+                    SnapshotTarifa.vigencia_fim >= snap.vigencia_inicio,
                 )
             )
+            .limit(1)
         )
-        return list(self._s.execute(stmt).scalars().all())
+        if ignorar_id is not None:
+            stmt = stmt.where(SnapshotTarifa.id != ignorar_id)
+        return self._s.execute(stmt).scalar_one_or_none() is not None
+
+    @staticmethod
+    def _nullable_equals(column, value):
+        if value is None:
+            return column.is_(None)
+        return column == value
 
 
 class PacoteRegrasRepository:
@@ -124,13 +148,28 @@ class PacoteRegrasRepository:
         self._s.flush()
         return pacote
 
-    def buscar_vigente(self) -> PacoteRegras | None:
-        return self._s.execute(
-            select(PacoteRegras).where(PacoteRegras.vigente.is_(True)).limit(1)
-        ).scalar_one_or_none()
-
     def listar(self) -> list[PacoteRegras]:
-        return list(self._s.execute(select(PacoteRegras)).scalars().all())
+        return list(
+            self._s.execute(select(PacoteRegras).order_by(desc(PacoteRegras.criado_em)))
+            .scalars()
+            .all()
+        )
+
+    def buscar_por_id(self, pacote_id: uuid.UUID) -> PacoteRegras | None:
+        return self._s.get(PacoteRegras, pacote_id)
+
+    def atualizar(self, pacote: PacoteRegras, dados: PacoteRegrasUpdate) -> None:
+        for campo, valor in dados.model_dump(exclude_unset=True).items():
+            setattr(pacote, campo, valor)
+        self._s.flush()
+
+    def limpar_vigente(self, exceto_id: uuid.UUID | None = None) -> None:
+        stmt = select(PacoteRegras).where(PacoteRegras.vigente.is_(True))
+        if exceto_id is not None:
+            stmt = stmt.where(PacoteRegras.id != exceto_id)
+        for pacote in self._s.execute(stmt).scalars().all():
+            pacote.vigente = False
+        self._s.flush()
 
     def desativar(self, pacote: PacoteRegras) -> None:
         pacote.ativo = False
@@ -153,6 +192,11 @@ class RegraValidacaoRepository:
     def buscar_por_id(self, regra_id: uuid.UUID) -> RegraValidacao | None:
         return self._s.get(RegraValidacao, regra_id)
 
+    def atualizar(self, regra: RegraValidacao, dados: RegraValidacaoUpdate) -> None:
+        for campo, valor in dados.model_dump(exclude_unset=True).items():
+            setattr(regra, campo, valor)
+        self._s.flush()
+
     def desativar(self, regra: RegraValidacao) -> None:
         regra.ativa = False
         self._s.flush()
@@ -167,4 +211,4 @@ class RegraValidacaoRepository:
         stmt = select(RegraValidacao).where(RegraValidacao.pacote_regras_id == pacote_id)
         if apenas_ativas:
             stmt = stmt.where(RegraValidacao.ativa.is_(True))
-        return list(self._s.execute(stmt).scalars().all())
+        return list(self._s.execute(stmt.order_by(RegraValidacao.codigo)).scalars().all())

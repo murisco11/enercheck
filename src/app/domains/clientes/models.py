@@ -1,7 +1,8 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import Boolean, Date, Enum as SAEnum, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.app.core.enums import Grupo, ModalidadeTarifaria, StatusLote, Subgrupo

@@ -29,8 +29,7 @@ class StatusDocumento(StrEnum):
     REVOGADO = "revogado"
     SUBSTITUIDO = "substituido"
 
-
-class CategoriaRegra(StrEnum):
+class CategoriaRegra(StrEnum): 
     COBRANCA_INDEVIDA = "cobranca_indevida"
     MEDICAO = "medicao"
     DEMANDA = "demanda"

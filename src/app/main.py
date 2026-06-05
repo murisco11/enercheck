@@ -66,4 +66,7 @@ async def handle_credenciais(_: Request, exc: CredenciaisInvalidasError) -> JSON
 @app.exception_handler(IntegrationError)
 async def handle_integration(_: Request, exc: IntegrationError) -> JSONResponse:
     logger.exception("integration.error: %s", exc)
-    return JSONResponse(status_code=502, content={"detail": "Falha ao processar integração externa."})
+    return JSONResponse(
+        status_code=502,
+        content={"detail": "Falha ao processar integração externa."},
+    )

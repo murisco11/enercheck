@@ -3,15 +3,19 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
-from src.app.api.v1.dependencies import DbDep, CurrentUserDep, requer_papel
-from src.app.core.enums import PapelUsuario
+from src.app.api.v1.dependencies import CurrentUserDep, DbDep
 from src.app.domains.clientes.schemas import (
+    AcessoClienteCreate,
+    AcessoClienteOut,
+    AcessoClienteUpdate,
+    AcessosClienteOut,
     ClienteCreate,
     ClienteOut,
-    ClienteUpdate,
     ClientesOut,
+    ClienteUpdate,
     DistribuidoraCreate,
     DistribuidoraOut,
+    DistribuidoraUpdate,
     LoteCreate,
     LoteOut,
     LoteResumoOut,
@@ -24,7 +28,6 @@ from src.app.domains.clientes.schemas import (
     UnidadeConsumidoraUpdate,
 )
 from src.app.domains.clientes.service import ClienteService, DistribuidoraService, LoteService
-
 
 distribuidoras_router = APIRouter(tags=["Distribuidoras"])
 
@@ -44,7 +47,9 @@ def listar_distribuidoras(
     return service.listar()
 
 
-@distribuidoras_router.post("/", response_model=DistribuidoraOut, status_code=status.HTTP_201_CREATED)
+@distribuidoras_router.post(
+    "/", response_model=DistribuidoraOut, status_code=status.HTTP_201_CREATED
+)
 def criar_distribuidora(
     payload: DistribuidoraCreate,
     ator: CurrentUserDep,
@@ -71,6 +76,16 @@ def deletar_distribuidora(
 ) -> Response:
     service.deletar(id, ator=ator, permanente=permanente)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@distribuidoras_router.patch("/{id}", response_model=DistribuidoraOut)
+def atualizar_distribuidora(
+    id: uuid.UUID,
+    payload: DistribuidoraUpdate,
+    ator: CurrentUserDep,
+    service: DistribuidoraServiceDep,
+) -> DistribuidoraOut:
+    return service.atualizar(id, payload, ator=ator)
 
 
 
@@ -128,6 +143,51 @@ def atualizar_cliente(
     return service.atualizar(id, payload, ator=ator)
 
 
+@clientes_router.get("/{id}/acessos", response_model=AcessosClienteOut)
+def listar_acessos_cliente(
+    id: uuid.UUID,
+    ator: CurrentUserDep,
+    service: ClienteServiceDep,
+) -> AcessosClienteOut:
+    return service.listar_acessos(id, ator=ator)
+
+
+@clientes_router.post(
+    "/{id}/acessos",
+    response_model=AcessoClienteOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def criar_acesso_cliente(
+    id: uuid.UUID,
+    payload: AcessoClienteCreate,
+    ator: CurrentUserDep,
+    service: ClienteServiceDep,
+) -> AcessoClienteOut:
+    return service.criar_acesso(id, payload, ator=ator)
+
+
+@clientes_router.patch("/{id}/acessos/{acesso_id}", response_model=AcessoClienteOut)
+def atualizar_acesso_cliente(
+    id: uuid.UUID,
+    acesso_id: uuid.UUID,
+    payload: AcessoClienteUpdate,
+    ator: CurrentUserDep,
+    service: ClienteServiceDep,
+) -> AcessoClienteOut:
+    return service.atualizar_acesso(id, acesso_id, payload, ator=ator)
+
+
+@clientes_router.delete("/{id}/acessos/{acesso_id}", status_code=status.HTTP_204_NO_CONTENT)
+def deletar_acesso_cliente(
+    id: uuid.UUID,
+    acesso_id: uuid.UUID,
+    ator: CurrentUserDep,
+    service: ClienteServiceDep,
+) -> Response:
+    service.deletar_acesso(id, acesso_id, ator=ator)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @clientes_router.get("/{id}/ucs", response_model=UCsOut)
 def listar_ucs(
     id: uuid.UUID,
@@ -137,7 +197,11 @@ def listar_ucs(
     return service.listar_ucs(id, ator=ator)
 
 
-@clientes_router.post("/{id}/ucs", response_model=UnidadeConsumidoraOut, status_code=status.HTTP_201_CREATED)
+@clientes_router.post(
+    "/{id}/ucs",
+    response_model=UnidadeConsumidoraOut,
+    status_code=status.HTTP_201_CREATED,
+)
 def criar_uc(
     id: uuid.UUID,
     payload: UnidadeConsumidoraCreate,
@@ -195,9 +259,9 @@ LoteServiceDep = Annotated[LoteService, Depends(get_lote_service)]
 def listar_lotes(
     ator: CurrentUserDep,
     service: LoteServiceDep,
-    uc_id: uuid.UUID | None = Query(default=None),
-    after_id: uuid.UUID | None = Query(default=None),
-    limite: int = Query(default=50, ge=1, le=200),
+    uc_id: Annotated[uuid.UUID | None, Query()] = None,
+    after_id: Annotated[uuid.UUID | None, Query()] = None,
+    limite: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> PageKeysetOut[LoteResumoOut]:
     pag = PaginacaoKeyset(after_id=after_id, limite=limite)
     return service.listar(pag=pag, ator=ator, uc_id=uc_id)

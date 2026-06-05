@@ -28,7 +28,12 @@ class TestCNPJValidation:
             ClienteCreate(razao_social="Test", cnpj="123456789012345")
 
     def test_cnpj_distribuidora_com_mascara(self):
-        d = DistribuidoraCreate(razao_social="Dist", cnpj="11.222.333/0001-81", sigla="DST", estado="SP")
+        d = DistribuidoraCreate(
+            razao_social="Dist",
+            cnpj="11.222.333/0001-81",
+            sigla="DST",
+            estado="SP",
+        )
         assert d.cnpj == "11222333000181"
 
 
@@ -98,24 +103,24 @@ class TestLoteValidation:
     def test_competencias_validas(self):
         from datetime import date
 
-        l = LoteCreate(
+        lote = LoteCreate(
             unidade_consumidora_id="00000000-0000-0000-0000-000000000002",
             rotulo="Lote Jan-Mar/2025",
             competencia_inicio=date(2025, 1, 1),
             competencia_fim=date(2025, 3, 31),
         )
-        assert l.competencia_inicio < l.competencia_fim
+        assert lote.competencia_inicio < lote.competencia_fim
 
     def test_competencias_mesmo_mes_valido(self):
         from datetime import date
 
-        l = LoteCreate(
+        lote = LoteCreate(
             unidade_consumidora_id="00000000-0000-0000-0000-000000000002",
             rotulo="Lote Jan/2025",
             competencia_inicio=date(2025, 1, 1),
             competencia_fim=date(2025, 1, 1),
         )
-        assert l.competencia_inicio == l.competencia_fim
+        assert lote.competencia_inicio == lote.competencia_fim
 
     def test_competencia_fim_anterior_ao_inicio_invalido(self):
         from datetime import date

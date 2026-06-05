@@ -40,6 +40,24 @@ class DistribuidoraCreate(BaseModel):
         return v.upper()
 
 
+class DistribuidoraUpdate(BaseModel):
+    razao_social: str | None = Field(default=None, min_length=1, max_length=255)
+    cnpj: str | None = None
+    sigla: str | None = Field(default=None, min_length=1, max_length=20)
+    estado: str | None = Field(default=None, min_length=2, max_length=2)
+    ativo: bool | None = None
+
+    @field_validator("cnpj")
+    @classmethod
+    def validar_cnpj(cls, v: str | None) -> str | None:
+        return _limpar_cnpj(v) if v else v
+
+    @field_validator("estado")
+    @classmethod
+    def validar_estado(cls, v: str | None) -> str | None:
+        return v.upper() if v else v
+
+
 class DistribuidoraOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -48,6 +66,7 @@ class DistribuidoraOut(BaseModel):
     cnpj: str
     sigla: str
     estado: str
+    ativo: bool
 
 
 # ===== Cliente =====
@@ -92,6 +111,32 @@ class ClienteResumoOut(BaseModel):
 
 class ClientesOut(BaseModel):
     itens: list[ClienteResumoOut]
+    total: int
+
+
+# ===== AcessoCliente =====
+
+
+class AcessoClienteCreate(BaseModel):
+    usuario_id: uuid.UUID
+    pode_editar: bool = False
+
+
+class AcessoClienteUpdate(BaseModel):
+    pode_editar: bool | None = None
+
+
+class AcessoClienteOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    usuario_id: uuid.UUID
+    cliente_id: uuid.UUID
+    pode_editar: bool
+
+
+class AcessosClienteOut(BaseModel):
+    itens: list[AcessoClienteOut]
     total: int
 
 

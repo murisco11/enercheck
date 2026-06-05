@@ -54,6 +54,45 @@ class StatusExtracao(StrEnum):
     ERRO = "erro"
 
 
+class BaseLeitura(StrEnum):
+    REAL = "real"
+    MEDIA = "media"
+    ESTIMADA = "estimada"
+
+
+class TipoItem(StrEnum):
+    TUSD = "tusd"
+    TE = "te"
+    DEMANDA = "demanda"
+    BANDEIRA = "bandeira"
+    COSIP = "cosip"
+    MULTA = "multa"
+    JUROS = "juros"
+    DESCONTO = "desconto"
+    OUTRO = "outro"
+
+
+class TipoTributo(StrEnum):
+    ICMS = "icms"
+    PIS = "pis"
+    COFINS = "cofins"
+    OUTRO = "outro"
+
+
+class StatusExecucao(StrEnum):
+    PENDENTE = "pendente"
+    PROCESSANDO = "processando"
+    CONCLUIDO = "concluido"
+    ERRO = "erro"
+
+
+class ResultadoRegra(StrEnum):
+    PASSOU = "passou"
+    FALHOU = "falhou"
+    NAO_APLICAVEL = "nao_aplicavel"
+    ERRO = "erro"
+
+
 class StatusAchado(StrEnum):
     ABERTO = "aberto"
     CONFIRMADO = "confirmado"
@@ -66,6 +105,21 @@ class StatusRecuperacao(StrEnum):
     EM_NEGOCIACAO = "em_negociacao"
     CONCLUIDO = "concluido"
     CANCELADO = "cancelado"
+
+
+class Prioridade(StrEnum):
+    BAIXA = "baixa"
+    MEDIA = "media"
+    ALTA = "alta"
+    CRITICA = "critica"
+
+
+class StatusItem(StrEnum):
+    ABERTO = "aberto"
+    EM_NEGOCIACAO = "em_negociacao"
+    RECONHECIDO = "reconhecido"
+    DEVOLVIDO = "devolvido"
+    DESCARTADO = "descartado"
 
 
 class SeveridadeRegra(StrEnum):

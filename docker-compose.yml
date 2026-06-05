@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -18,6 +16,8 @@ services:
       dockerfile: Dockerfile.api
     env_file:
       - .env
+    environment:
+      DB_HOST: db
     depends_on:
       - db
     ports:
@@ -29,6 +29,8 @@ services:
       dockerfile: Dockerfile.worker
     env_file:
       - .env
+    environment:
+      DB_HOST: db
     depends_on:
       - api
       - db

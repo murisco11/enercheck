@@ -53,7 +53,9 @@ class UsuarioService:
 
     def login(self, dados: LoginRequest) -> TokenOut:
         credenciais = self.repo.buscar_credenciais_por_email(dados.email)
-        if credenciais is None or not self.repo.verificar_senha(dados.senha, credenciais.senha_hash):
+        if credenciais is None or not self.repo.verificar_senha(
+            dados.senha, credenciais.senha_hash
+        ):
             raise CredenciaisInvalidasError("E-mail ou senha inválidos.")
         if not credenciais.ativo:
             raise CredenciaisInvalidasError("Conta inativa.")
@@ -83,7 +85,9 @@ class UsuarioService:
             papel=usuario.papel.value,
         )
 
-    def atualizar(self, id: uuid.UUID, dados: UsuarioUpdate, ator: UsuarioAutenticado) -> UsuarioOut:
+    def atualizar(
+        self, id: uuid.UUID, dados: UsuarioUpdate, ator: UsuarioAutenticado
+    ) -> UsuarioOut:
         ator_papel = PapelUsuario(ator.papel)
         if ator_papel != PapelUsuario.ADMIN and ator.id != id:
             raise AcessoNegadoError("Você não pode alterar outro usuário.")

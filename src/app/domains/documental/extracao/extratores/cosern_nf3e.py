@@ -35,8 +35,10 @@ TOLERANCIA = Decimal("1.00")
 
 _ITEM_CONSUMO = re.compile(r"^(Consumo-?\s?T[EU]S?D?|Consumo-?\s?TE)\b", re.I)
 _QTD_PRECO = re.compile(r"(\d{1,3}(?:\.\d{3})*,\d{2})\s+(0,\d{6,})")
-# Linha do medidor: nº de série + grandeza + posto + consumo, tudo na mesma linha.
-_MEDIDOR = re.compile(r"^(\d{8,})\b[^\n]*\b(Único|Ponta|Fora|Intermedi)[^\n]*", re.I | re.M)
+# Linha do medidor: nº de série + grandeza + posto (+ leituras/consumo, que podem
+# estar na mesma linha ou na seguinte). O ^\s* tolera a indentação do pdfplumber.
+_MEDIDOR = re.compile(r"^\s*(\d{8,})\b[^\n]*\b(Único|Ponta|Fora|Intermedi)[^\n]*", re.I | re.M)
+_DEC = r"\d{1,3}(?:\.\d{3})*,\d+|\d+,\d+"
 # Chave NF3e: 11 grupos de 4 dígitos (44 no total). Os lookarounds de dígito
 # evitam capturar o fim de um número vizinho (ex.: código do cliente) como 1º grupo.
 _CHAVE = re.compile(r"(?<!\d)((?:\d{4}\s+){10}\d{4})(?!\d)")
@@ -194,26 +196,32 @@ class CosernExtratorNF3e:
         linha = m.group(0)
         serial = m.group(1)
         posto = self._posto(m.group(2))
-        consumo = self._ultimo_decimal(linha)
-        leit_ant, leit_atual, constante = self._leituras_apos(t, m.end())
+
+        # As leituras/consumo podem estar na própria linha (pdfplumber) ou nas
+        # linhas seguintes (pdftotext). O consumo é o último decimal da linha do
+        # medidor; ant/atual/constante são os três primeiros decimais restantes.
+        numeros_linha = re.findall(_DEC, linha)
+        consumo = parse_decimal_br(numeros_linha[-1]) if numeros_linha else None
+        restantes = numeros_linha[:-1]
+        if len(restantes) < 3:
+            for seguinte in t[m.end():].splitlines():
+                restantes += re.findall(_DEC, seguinte)
+                if len(restantes) >= 3:
+                    break
+
+        ant = parse_decimal_br(restantes[0]) if len(restantes) > 0 else Decimal("0")
+        atual = parse_decimal_br(restantes[1]) if len(restantes) > 1 else Decimal("0")
+        const = parse_decimal_br(restantes[2]) if len(restantes) > 2 else Decimal("1")
         return [
             MedidaExtraida(
                 serial_medidor=serial,
                 posto_horario=posto,
-                leitura_anterior=leit_ant,
-                leitura_atual=leit_atual,
-                constante_medidor=constante,
+                leitura_anterior=ant or Decimal("0"),
+                leitura_atual=atual or Decimal("0"),
+                constante_medidor=const or Decimal("1"),
                 consumo_kwh=consumo or Decimal("0"),
             )
         ]
-
-    def _leituras_apos(self, t: str, pos: int) -> tuple[Decimal, Decimal, Decimal]:
-        for linha in t[pos:].splitlines():
-            numeros = re.findall(r"[\d.]+,\d+", linha)
-            if len(numeros) >= 3:
-                ant, atual, const = (parse_decimal_br(n) for n in numeros[:3])
-                return (ant or Decimal("0"), atual or Decimal("0"), const or Decimal("1"))
-        return Decimal("0"), Decimal("0"), Decimal("1")
 
     @staticmethod
     def _posto(texto: str) -> PostoHorario:
@@ -225,11 +233,6 @@ class CosernExtratorNF3e:
         if t.startswith("intermedi"):
             return PostoHorario.INTERMEDIARIO
         return PostoHorario.UNICO
-
-    @staticmethod
-    def _ultimo_decimal(linha: str) -> Decimal | None:
-        numeros = re.findall(r"[\d.]+,\d+", linha)
-        return parse_decimal_br(numeros[-1]) if numeros else None
 
     @staticmethod
     def _confianca(fatura: FaturaExtraida) -> float:

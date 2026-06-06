@@ -1,8 +1,11 @@
 import uuid
+from dataclasses import dataclass
+from datetime import date
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from src.app.core.enums import Grupo, ModalidadeTarifaria, PostoHorario, Subgrupo
 from src.app.core.exceptions import ConflitoDuplicidadeError, NaoEncontradoError, RegraVioladaError
 from src.app.domains.clientes.repository import DistribuidoraRepository
 from src.app.domains.regulatorio.models import (
@@ -30,6 +33,64 @@ from src.app.domains.regulatorio.schemas import (
     SnapshotTarifaCreate,
     SnapshotTarifaUpdate,
 )
+
+
+def competencia_para_data(competencia: str) -> date:
+    """'YYYY-MM' -> primeiro dia do mês (referência de vigência)."""
+    ano, mes = competencia.split("-")
+    return date(int(ano), int(mes), 1)
+
+
+@dataclass(frozen=True)
+class ContextoRegulatorio:
+    """Tudo o que o motor determinístico precisa para validar uma fatura."""
+
+    pacote: PacoteRegras
+    snapshot: SnapshotTarifa | None
+    regras: list[RegraValidacao]
+
+
+class ResolucaoService:
+    """Resolve, por vigência, o pacote de regras, o snapshot tarifário e as regras
+    aplicáveis a uma fatura — a ponte entre o repositório regulatório e o motor."""
+
+    def __init__(self, session: Session):
+        self._pacotes = PacoteRegrasRepository(session)
+        self._snapshots = SnapshotTarifaRepository(session)
+        self._regras = RegraValidacaoRepository(session)
+
+    def resolver_contexto(
+        self,
+        *,
+        distribuidora_id: uuid.UUID,
+        grupo: Grupo,
+        subgrupo: Subgrupo,
+        modalidade: ModalidadeTarifaria,
+        competencia: str,
+        posto: PostoHorario | None = None,
+    ) -> ContextoRegulatorio:
+        pacote = self._pacotes.buscar_vigente()
+        if pacote is None:
+            raise RegraVioladaError(
+                "Nenhum pacote de regras vigente: publique um pacote antes de validar."
+            )
+        ref = competencia_para_data(competencia)
+        snapshot = self._snapshots.resolver(
+            distribuidora_id=distribuidora_id,
+            grupo=grupo,
+            subgrupo=subgrupo,
+            modalidade=modalidade,
+            competencia=ref,
+            posto=posto,
+        )
+        regras = self._regras.listar_aplicaveis(
+            pacote.id,
+            grupo=grupo,
+            subgrupo=subgrupo,
+            modalidade=modalidade,
+            competencia=ref,
+        )
+        return ContextoRegulatorio(pacote=pacote, snapshot=snapshot, regras=regras)
 
 
 class DocumentoRegulatorioService:

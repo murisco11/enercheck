@@ -4,6 +4,7 @@ from datetime import date
 from sqlalchemy import desc, or_, select
 from sqlalchemy.orm import Session
 
+from src.app.core.enums import Grupo, ModalidadeTarifaria, PostoHorario, Subgrupo
 from src.app.domains.regulatorio.models import (
     ChunkRegulatorio,
     DocumentoRegulatorio,
@@ -93,6 +94,46 @@ class SnapshotTarifaRepository:
     def buscar_por_id(self, snap_id: uuid.UUID) -> SnapshotTarifa | None:
         return self._s.get(SnapshotTarifa, snap_id)
 
+    def resolver(
+        self,
+        *,
+        distribuidora_id: uuid.UUID,
+        grupo: Grupo,
+        subgrupo: Subgrupo,
+        modalidade: ModalidadeTarifaria,
+        competencia: date,
+        posto: PostoHorario | None = None,
+    ) -> SnapshotTarifa | None:
+        """Snapshot tarifário vigente na competência para a configuração da UC.
+
+        O posto é casado quando informado, mas snapshots sem posto (genéricos)
+        também são aceitos. Em caso de empate, vence a vigência mais recente.
+        """
+        stmt = (
+            select(SnapshotTarifa)
+            .where(SnapshotTarifa.ativo.is_(True))
+            .where(SnapshotTarifa.distribuidora_id == distribuidora_id)
+            .where(SnapshotTarifa.grupo == grupo)
+            .where(SnapshotTarifa.subgrupo == subgrupo)
+            .where(SnapshotTarifa.modalidade == modalidade)
+            .where(SnapshotTarifa.vigencia_inicio <= competencia)
+            .where(
+                or_(
+                    SnapshotTarifa.vigencia_fim.is_(None),
+                    SnapshotTarifa.vigencia_fim >= competencia,
+                )
+            )
+            .order_by(desc(SnapshotTarifa.vigencia_inicio))
+        )
+        if posto is not None:
+            stmt = stmt.where(
+                or_(
+                    SnapshotTarifa.posto_horario == posto,
+                    SnapshotTarifa.posto_horario.is_(None),
+                )
+            )
+        return self._s.execute(stmt).scalars().first()
+
     def atualizar(self, snap: SnapshotTarifa, dados: SnapshotTarifaUpdate) -> None:
         for campo, valor in dados.model_dump(exclude_unset=True).items():
             setattr(snap, campo, valor)
@@ -158,6 +199,15 @@ class PacoteRegrasRepository:
     def buscar_por_id(self, pacote_id: uuid.UUID) -> PacoteRegras | None:
         return self._s.get(PacoteRegras, pacote_id)
 
+    def buscar_vigente(self) -> PacoteRegras | None:
+        stmt = (
+            select(PacoteRegras)
+            .where(PacoteRegras.vigente.is_(True))
+            .where(PacoteRegras.ativo.is_(True))
+            .order_by(desc(PacoteRegras.criado_em))
+        )
+        return self._s.execute(stmt).scalars().first()
+
     def atualizar(self, pacote: PacoteRegras, dados: PacoteRegrasUpdate) -> None:
         for campo, valor in dados.model_dump(exclude_unset=True).items():
             setattr(pacote, campo, valor)
@@ -212,3 +262,50 @@ class RegraValidacaoRepository:
         if apenas_ativas:
             stmt = stmt.where(RegraValidacao.ativa.is_(True))
         return list(self._s.execute(stmt.order_by(RegraValidacao.codigo)).scalars().all())
+
+    def listar_aplicaveis(
+        self,
+        pacote_id: uuid.UUID,
+        *,
+        grupo: Grupo,
+        subgrupo: Subgrupo,
+        modalidade: ModalidadeTarifaria,
+        competencia: date,
+    ) -> list[RegraValidacao]:
+        """Regras ativas do pacote cujo escopo e vigência cobrem a fatura.
+
+        Um campo de escopo nulo (aplica_grupo/subgrupo/modalidade) significa "vale
+        para qualquer valor". A vigência nula significa "sempre vigente".
+        """
+        stmt = (
+            select(RegraValidacao)
+            .where(RegraValidacao.pacote_regras_id == pacote_id)
+            .where(RegraValidacao.ativa.is_(True))
+            .where(or_(RegraValidacao.aplica_grupo.is_(None), RegraValidacao.aplica_grupo == grupo))
+            .where(
+                or_(
+                    RegraValidacao.aplica_subgrupo.is_(None),
+                    RegraValidacao.aplica_subgrupo == subgrupo,
+                )
+            )
+            .where(
+                or_(
+                    RegraValidacao.aplica_modalidade.is_(None),
+                    RegraValidacao.aplica_modalidade == modalidade,
+                )
+            )
+            .where(
+                or_(
+                    RegraValidacao.vigencia_inicio.is_(None),
+                    RegraValidacao.vigencia_inicio <= competencia,
+                )
+            )
+            .where(
+                or_(
+                    RegraValidacao.vigencia_fim.is_(None),
+                    RegraValidacao.vigencia_fim >= competencia,
+                )
+            )
+            .order_by(RegraValidacao.codigo)
+        )
+        return list(self._s.execute(stmt).scalars().all())

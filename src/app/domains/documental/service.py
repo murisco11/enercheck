@@ -1,4 +1,6 @@
+import hashlib
 import uuid
+from pathlib import Path
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -10,6 +12,7 @@ from src.app.core.exceptions import (
     NaoEncontradoError,
     RegraVioladaError,
 )
+from src.app.core.storage import get_object_storage
 from src.app.domains.auth.service import UsuarioAutenticado
 from src.app.domains.clientes.models import AcessoCliente, LoteAuditoria, UnidadeConsumidora
 from src.app.domains.clientes.repository import (
@@ -129,6 +132,45 @@ class DocumentoBrutoService:
             self.db.rollback()
             raise ConflitoDuplicidadeError("Já existe um documento com este sha256.") from exc
         return DocumentoBrutoOut.model_validate(documento)
+
+    def ingerir(
+        self,
+        conteudo: bytes,
+        nome_original: str,
+        unidade_consumidora_id: uuid.UUID,
+        ator: UsuarioAutenticado,
+        lote_auditoria_id: uuid.UUID | None = None,
+    ) -> DocumentoBruto:
+        """Recebe o arquivo bruto, deduplica por sha256 e o guarda para extração."""
+        uc = self._obter_uc(unidade_consumidora_id)
+        self._verificar_acesso_uc(uc, ator, exigir_edicao=True)
+        self._validar_lote(lote_auditoria_id, uc.id)
+        if not conteudo:
+            raise RegraVioladaError("Arquivo vazio.")
+
+        sha256 = hashlib.sha256(conteudo).hexdigest()
+        if self.repo.buscar_por_sha256(sha256) is not None:
+            raise ConflitoDuplicidadeError(
+                "Documento idêntico já foi enviado (mesmo conteúdo)."
+            )
+
+        extensao = Path(nome_original).suffix.lstrip(".").lower()
+        uri = get_object_storage().salvar(conteudo, sha256, extensao=extensao)
+        dados = DocumentoBrutoCreate(
+            unidade_consumidora_id=uc.id,
+            lote_auditoria_id=lote_auditoria_id,
+            uri_armazenamento=uri,
+            nome_original=nome_original[:255],
+            sha256=sha256,
+        )
+        try:
+            documento = self.repo.criar(dados, enviado_por_id=ator.id)
+            self.db.commit()
+            self.db.refresh(documento)
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise ConflitoDuplicidadeError("Já existe um documento com este sha256.") from exc
+        return documento
 
     def listar(
         self,

@@ -1,10 +1,21 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 
 from src.app.api.v1.dependencies import CurrentUserDep, DbDep
 from src.app.core.enums import StatusExtracao
+from src.app.domains.documental.processamento import processar_extracao
 from src.app.domains.documental.schemas import (
     DocumentoBrutoCreate,
     DocumentoBrutoOut,
@@ -89,6 +100,31 @@ def listar_documentos(
         lote_auditoria_id=lote_auditoria_id,
         status_extracao=status_extracao,
     )
+
+
+@router.post(
+    "/documentos/upload",
+    response_model=DocumentoBrutoOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_documento(
+    ator: CurrentUserDep,
+    service: DocumentoServiceDep,
+    background: BackgroundTasks,
+    arquivo: Annotated[UploadFile, File()],
+    unidade_consumidora_id: Annotated[uuid.UUID, Form()],
+    lote_auditoria_id: Annotated[uuid.UUID | None, Form()] = None,
+) -> DocumentoBrutoOut:
+    conteudo = await arquivo.read()
+    documento = service.ingerir(
+        conteudo=conteudo,
+        nome_original=arquivo.filename or "documento.pdf",
+        unidade_consumidora_id=unidade_consumidora_id,
+        ator=ator,
+        lote_auditoria_id=lote_auditoria_id,
+    )
+    background.add_task(processar_extracao, documento.id)
+    return DocumentoBrutoOut.model_validate(documento)
 
 
 @router.post("/documentos", response_model=DocumentoBrutoOut, status_code=status.HTTP_201_CREATED)

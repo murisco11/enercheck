@@ -91,6 +91,11 @@ class DocumentoBrutoRepository:
     def buscar_por_id(self, id: uuid.UUID) -> DocumentoBruto | None:
         return self.db.get(DocumentoBruto, id)
 
+    def buscar_por_sha256(self, sha256: str) -> DocumentoBruto | None:
+        return self.db.scalar(
+            select(DocumentoBruto).where(DocumentoBruto.sha256 == sha256.lower())
+        )
+
     def atualizar(self, documento: DocumentoBruto, dados: DocumentoBrutoUpdate) -> None:
         for campo, valor in dados.model_dump(exclude_unset=True).items():
             setattr(documento, campo, valor)

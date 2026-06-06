@@ -14,6 +14,7 @@ from src.app.api.v1.dependencies import get_session_manager
 from src.app.core.enums import StatusExtracao
 from src.app.core.storage import get_object_storage
 from src.app.domains.clientes.repository import UnidadeConsumidoraRepository
+from src.app.domains.documental.duplicidade import sinalizar_duplicidade
 from src.app.domains.documental.extracao import executar_extracao
 from src.app.domains.documental.normalizacao import para_fatura_create
 from src.app.domains.documental.repository import (
@@ -80,8 +81,9 @@ def _persistir_faturas(db, documento, uc_id, faturas) -> int:  # noqa: ANN001
         )
         try:
             with db.begin_nested():
-                repo.criar(dados)
+                fatura = repo.criar(dados)
             persistidas += 1
+            sinalizar_duplicidade(db, fatura)
         except IntegrityError:
             # Chave de acesso já existente: duplicata exata, ignorada.
             logger.info("Fatura %s já existe (chave duplicada); ignorada.", extraida.chave_acesso)

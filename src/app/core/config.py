@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     extracao_confianca_minima: float = Field(
         default=0.85, alias="EXTRACAO_CONFIANCA_MINIMA"
     )
+    economico_indice_mensal: float = Field(default=0.0, alias="ECONOMICO_INDICE_MENSAL")
     messaging_backend: str = Field(default="inmemory", alias="MESSAGING_BACKEND")
     worker_poll_interval_seconds: float = Field(
         default=0.1,

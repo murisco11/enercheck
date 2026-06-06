@@ -17,6 +17,7 @@ from src.app.core.exceptions import NaoEncontradoError
 from src.app.domains.auditoria.models import Achado, ExecucaoValidacao, ResultadoRegra
 from src.app.domains.auditoria.motor.avaliador import ResultadoAvaliacao, avaliar
 from src.app.domains.auditoria.motor.contexto import ContextoAvaliacao
+from src.app.domains.auditoria.motor.economico import quantificar
 from src.app.domains.clientes.repository import UnidadeConsumidoraRepository
 from src.app.domains.faturas.models import Fatura
 from src.app.domains.faturas.repository import FaturaRepository
@@ -115,24 +116,33 @@ class ValidacaoExecutor:
         resultado: ResultadoRegra,
         avaliacao: ResultadoAvaliacao,
     ) -> Achado:
-        # A quantificação econômica (atualização monetária, devolução em dobro) é
-        # aplicada na Fase 5; por ora usa-se o valor cru apurado pela regra.
-        valor, modo = avaliacao.cobrado_a_maior, None
+        economico = quantificar(avaliacao, fatura, categoria=regra.categoria)
         achado = Achado(
             fatura_id=fatura.id,
             execucao_validacao_id=execucao.id,
             resultado_regra_id=resultado.id,
             titulo=regra.nome,
-            descricao=avaliacao.mensagem,
+            descricao=self._descricao_com_economico(avaliacao.mensagem, economico),
             categoria=regra.categoria,
             severidade=regra.severidade,
             status=StatusAchado.ABERTO,
-            valor_cobrado_a_maior=valor,
-            modo_devolucao_estimado=modo,
+            valor_cobrado_a_maior=economico.valor_cobrado_a_maior,
+            modo_devolucao_estimado=economico.modo_devolucao,
         )
         self.db.add(achado)
         self.db.flush()
         return achado
+
+    @staticmethod
+    def _descricao_com_economico(mensagem: str, economico) -> str:  # noqa: ANN001
+        if economico.valor_cobrado_a_maior <= 0:
+            return mensagem
+        devolucao = "em dobro" if economico.em_dobro else "simples"
+        return (
+            f"{mensagem} Cobrado a maior: R$ {economico.valor_cobrado_a_maior}; "
+            f"atualizado: R$ {economico.valor_atualizado}; classificação de devolução: "
+            f"{devolucao}; recuperável estimado: R$ {economico.valor_recuperavel}."
+        )
 
     @staticmethod
     def _contexto(fatura: Fatura, contexto_reg: ContextoRegulatorio) -> ContextoAvaliacao:

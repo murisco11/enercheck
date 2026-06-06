@@ -21,6 +21,15 @@ class Settings(BaseSettings):
     db_name: str = Field(default="enercheck_db", alias="DB_NAME")
     ai_provider: str = Field(default="mock", alias="AI_PROVIDER")
     ai_mock_response_prefix: str = Field(default="[mock-ai]", alias="AI_MOCK_RESPONSE_PREFIX")
+    openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
+    openai_model_extracao: str = Field(default="gpt-4o-mini", alias="OPENAI_MODEL_EXTRACAO")
+    openai_model_embedding: str = Field(
+        default="text-embedding-3-small", alias="OPENAI_MODEL_EMBEDDING"
+    )
+    storage_dir: str = Field(default="./storage", alias="STORAGE_DIR")
+    extracao_confianca_minima: float = Field(
+        default=0.85, alias="EXTRACAO_CONFIANCA_MINIMA"
+    )
     messaging_backend: str = Field(default="inmemory", alias="MESSAGING_BACKEND")
     worker_poll_interval_seconds: float = Field(
         default=0.1,

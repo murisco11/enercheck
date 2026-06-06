@@ -17,6 +17,7 @@ from src.app.core.exceptions import (
 )
 from src.app.core.logging import configure_logging
 from src.app.core.middleware import RequestContextMiddleware
+from src.app.core.openapi_selects import configurar_selects_openapi
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -36,6 +37,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.add_middleware(RequestContextMiddleware)
 app.include_router(api_router)
+configurar_selects_openapi(app)
 
 
 @app.exception_handler(NaoEncontradoError)

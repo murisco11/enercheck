@@ -19,8 +19,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.app.api.v1.dependencies import get_session_manager
-from src.app.core.enums import Grupo, ModalidadeTarifaria, Subgrupo
-from src.app.domains.clientes.models import Distribuidora
+from src.app.core.enums import Grupo, ModalidadeTarifaria, PapelUsuario, StatusLote, Subgrupo
+from src.app.domains.auth.models import Usuario
+from src.app.domains.auth.repository import UsuarioRepository
+from src.app.domains.clientes.models import (
+    Cliente,
+    Distribuidora,
+    LoteAuditoria,
+    UnidadeConsumidora,
+)
 from src.app.domains.documental.models import LayoutFatura
 from src.app.domains.regulatorio.enums import CategoriaRegra, Severidade
 from src.app.domains.regulatorio.models import PacoteRegras, RegraValidacao, SnapshotTarifa
@@ -29,6 +36,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("seed")
 
 COSERN_CNPJ = "08324196000181"
+ADMIN_EMAIL = "admin@enercheck.local"
+ADMIN_SENHA = "Admin1234"
+CLIENTE_DEMO_CNPJ = "12345678000199"
 
 
 def seed(db: Session) -> None:
@@ -37,8 +47,20 @@ def seed(db: Session) -> None:
     pacote = _pacote_regras(db)
     _regras(db, pacote.id)
     _snapshots(db, distribuidora.id)
+
+    admin = _admin_demo(db)
+    cliente = _cliente_demo(db)
+    uc = _uc_demo(db, cliente.id, distribuidora.id)
+    lote = _lote_demo(db, uc.id, admin.id)
     db.commit()
+
     logger.info("Seed concluído.")
+    logger.info("--- Dados de demonstração ---")
+    logger.info("Admin:        %s / senha: %s", ADMIN_EMAIL, ADMIN_SENHA)
+    logger.info("Distribuidora: %s (%s)", distribuidora.sigla, distribuidora.id)
+    logger.info("Cliente:       %s (%s)", cliente.razao_social, cliente.id)
+    logger.info("UC:            %s (%s)", uc.codigo_instalacao, uc.id)
+    logger.info("Lote:          %s (%s)", lote.rotulo, lote.id)
 
 
 def _distribuidora(db: Session) -> Distribuidora:
@@ -194,6 +216,80 @@ def _snapshots(db: Session, distribuidora_id) -> None:  # noqa: ANN001
         if existe is None:
             db.add(SnapshotTarifa(**snap))
             logger.info("Snapshot tarifário %s criado.", snap["vigencia_inicio"])
+
+
+def _admin_demo(db: Session) -> Usuario:
+    admin = db.scalar(select(Usuario).where(Usuario.email == ADMIN_EMAIL))
+    if admin is None:
+        admin = Usuario(
+            nome="Admin Demo",
+            email=ADMIN_EMAIL,
+            senha_hash=UsuarioRepository._hash_senha(ADMIN_SENHA),
+            papel=PapelUsuario.ADMIN,
+            ativo=True,
+        )
+        db.add(admin)
+        db.flush()
+        logger.info("Usuário admin de demonstração criado.")
+    return admin
+
+
+def _cliente_demo(db: Session) -> Cliente:
+    cliente = db.scalar(select(Cliente).where(Cliente.cnpj == CLIENTE_DEMO_CNPJ))
+    if cliente is None:
+        cliente = Cliente(
+            razao_social="Cliente Demonstração LTDA",
+            nome_fantasia="Cliente Demo",
+            cnpj=CLIENTE_DEMO_CNPJ,
+        )
+        db.add(cliente)
+        db.flush()
+        logger.info("Cliente de demonstração criado.")
+    return cliente
+
+
+def _uc_demo(db: Session, cliente_id, distribuidora_id) -> UnidadeConsumidora:  # noqa: ANN001
+    uc = db.scalar(
+        select(UnidadeConsumidora)
+        .where(UnidadeConsumidora.distribuidora_id == distribuidora_id)
+        .where(UnidadeConsumidora.codigo_instalacao == "DEMO-001")
+    )
+    if uc is None:
+        uc = UnidadeConsumidora(
+            cliente_id=cliente_id,
+            distribuidora_id=distribuidora_id,
+            codigo_instalacao="DEMO-001",
+            grupo=Grupo.B,
+            subgrupo=Subgrupo.B1,
+            modalidade=ModalidadeTarifaria.CONVENCIONAL,
+            cidade="Natal",
+            estado="RN",
+        )
+        db.add(uc)
+        db.flush()
+        logger.info("Unidade consumidora de demonstração criada.")
+    return uc
+
+
+def _lote_demo(db: Session, uc_id, criado_por_id) -> LoteAuditoria:  # noqa: ANN001
+    lote = db.scalar(
+        select(LoteAuditoria)
+        .where(LoteAuditoria.unidade_consumidora_id == uc_id)
+        .where(LoteAuditoria.rotulo == "Lote de demonstração")
+    )
+    if lote is None:
+        lote = LoteAuditoria(
+            unidade_consumidora_id=uc_id,
+            criado_por_id=criado_por_id,
+            rotulo="Lote de demonstração",
+            status=StatusLote.PENDENTE,
+            competencia_inicio=date(2021, 1, 1),
+            competencia_fim=date(2025, 12, 31),
+        )
+        db.add(lote)
+        db.flush()
+        logger.info("Lote de demonstração criado.")
+    return lote
 
 
 def main() -> None:

@@ -4,6 +4,7 @@ from src.app.api.v1.health import router as health_router
 from src.app.domains.auditoria.router import (
     achados_router,
     fatura_validacoes_router,
+    lote_validacoes_router,
     validacoes_router,
 )
 from src.app.domains.auth.router import router as auth_router
@@ -23,6 +24,7 @@ api_router.include_router(auth_router, prefix="/auth")
 api_router.include_router(clientes_router, prefix="/clientes")
 api_router.include_router(distribuidoras_router, prefix="/distribuidoras")
 api_router.include_router(lotes_router, prefix="/lotes")
+api_router.include_router(lote_validacoes_router, prefix="/lotes")
 api_router.include_router(documental_router, prefix="/documental")
 api_router.include_router(faturas_router, prefix="/faturas")
 api_router.include_router(fatura_validacoes_router, prefix="/faturas")

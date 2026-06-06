@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from src.app.core.enums import PapelUsuario, StatusAchado
 from src.app.core.exceptions import AcessoNegadoError, NaoEncontradoError
 from src.app.domains.auditoria.models import Achado
+from src.app.domains.auditoria.motor import ValidacaoExecutor
 from src.app.domains.auditoria.repository import AchadoRepository, ExecucaoValidacaoRepository
 from src.app.domains.auditoria.schemas import (
     AchadoCreate,
@@ -18,6 +19,7 @@ from src.app.domains.auth.service import UsuarioAutenticado
 from src.app.domains.clientes.models import AcessoCliente, UnidadeConsumidora
 from src.app.domains.clientes.repository import (
     AcessoClienteRepository,
+    LoteRepository,
     UnidadeConsumidoraRepository,
 )
 from src.app.domains.faturas.models import Fatura
@@ -31,6 +33,7 @@ class ValidacaoService:
         self.fatura_repo = FaturaRepository(db)
         self.uc_repo = UnidadeConsumidoraRepository(db)
         self.acesso_repo = AcessoClienteRepository(db)
+        self.lote_repo = LoteRepository(db)
 
     def listar_por_fatura(
         self, fatura_id: uuid.UUID, ator: UsuarioAutenticado
@@ -51,6 +54,26 @@ class ValidacaoService:
         uc = self._obter_uc(fatura.unidade_consumidora_id)
         self._verificar_acesso_uc(uc, ator, exigir_edicao=False)
         return ExecucaoValidacaoDetalheOut.model_validate(execucao)
+
+    def executar(
+        self, fatura_id: uuid.UUID, ator: UsuarioAutenticado
+    ) -> ExecucaoValidacaoDetalheOut:
+        """Roda o motor determinístico sobre uma fatura e persiste a execução."""
+        fatura = self._obter_fatura(fatura_id)
+        uc = self._obter_uc(fatura.unidade_consumidora_id)
+        self._verificar_acesso_uc(uc, ator, exigir_edicao=True)
+        execucao = ValidacaoExecutor(self.db).executar(fatura_id, disparado_por_id=ator.id)
+        self.db.commit()
+        return self.obter(execucao.id, ator=ator)
+
+    def autorizar_lote(self, lote_id: uuid.UUID, ator: UsuarioAutenticado) -> uuid.UUID:
+        """Valida acesso ao lote antes de agendar a validação em background."""
+        lote = self.lote_repo.buscar_por_id(lote_id)
+        if lote is None:
+            raise NaoEncontradoError("Lote de auditoria não encontrado.")
+        uc = self._obter_uc(lote.unidade_consumidora_id)
+        self._verificar_acesso_uc(uc, ator, exigir_edicao=True)
+        return lote.id
 
     def _obter_fatura(self, fatura_id: uuid.UUID) -> Fatura:
         fatura = self.fatura_repo.buscar_por_id(fatura_id)

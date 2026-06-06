@@ -1,10 +1,11 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Response, status
 
 from src.app.api.v1.dependencies import CurrentUserDep, DbDep
 from src.app.core.enums import StatusAchado
+from src.app.domains.auditoria.processamento import processar_validacao_lote
 from src.app.domains.auditoria.schemas import (
     AchadoCreate,
     AchadoOut,
@@ -90,3 +91,31 @@ def listar_validacoes_fatura(
     service: ValidacaoServiceDep,
 ) -> list[ExecucaoValidacaoOut]:
     return service.listar_por_fatura(id, ator=ator)
+
+
+@fatura_validacoes_router.post(
+    "/{id}/validacoes",
+    response_model=ExecucaoValidacaoDetalheOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def executar_validacao_fatura(
+    id: uuid.UUID,
+    ator: CurrentUserDep,
+    service: ValidacaoServiceDep,
+) -> ExecucaoValidacaoDetalheOut:
+    return service.executar(id, ator=ator)
+
+
+lote_validacoes_router = APIRouter(tags=["Validações"])
+
+
+@lote_validacoes_router.post("/{id}/validacoes", status_code=status.HTTP_202_ACCEPTED)
+def executar_validacao_lote(
+    id: uuid.UUID,
+    ator: CurrentUserDep,
+    service: ValidacaoServiceDep,
+    background: BackgroundTasks,
+) -> dict[str, str]:
+    lote_id = service.autorizar_lote(id, ator=ator)
+    background.add_task(processar_validacao_lote, lote_id, ator.id)
+    return {"detail": "Validação do lote agendada.", "lote_id": str(lote_id)}
